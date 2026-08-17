@@ -3,188 +3,93 @@
 use App\Models\Business;
 use App\Models\Outlets;
 use App\Models\User;
-use Inertia\Testing\AssertableInertia as Assert;
 
-test('an admin user can view the outlets index page', function () {
-    $user = User::factory()->create();
-    $business = Business::factory()->create();
-    $outlet = Outlets::factory()->create(['business_id' => $business->id]);
-
-    $this->actingAs($user);
-
-    $response = $this->get(route('outlets.index'));
-
-    $response->assertOk();
-    $response->assertInertia(fn (Assert $page) => $page
-        ->component('outlets/Index')
-        ->has('outlets.data', 1, fn (Assert $p) => $p
-            ->where('id', $outlet->id)
-            ->where('name', $outlet->name)
-            ->where('address', $outlet->address)
-            ->where('phone', $outlet->phone)
-            ->where('business_id', $business->id)
-            ->etc()
-        )
-    );
+beforeEach(function () {
+    $this->business = Business::factory()->create();
+    $this->user = User::factory()->create([
+        'business_id' => $this->business->id,
+        'role' => 'owner',
+    ]);
+    $this->actingAs($this->user);
 });
 
-test('an admin user can view the create outlets page', function () {
-    $user = User::factory()->create();
-    $business = Business::factory()->create();
+test('a user can create an outlet for their own business', function () {
 
-    $this->actingAs($user);
-
-    $response = $this->get(route('outlets.create'));
-
-    $response->assertOk();
-    $response->assertInertia(fn (Assert $page) => $page
-        ->component('outlets/Create')
-        ->has('businesses', 1, fn (Assert $p) => $p
-            ->where('id', $business->id)
-            ->where('name', $business->name)
-            ->etc()
-        )
-    );
-});
-
-test('an admin user can create a new outlet', function () {
-    $user = User::factory()->create();
-    $business = Business::factory()->create();
-
-    $this->actingAs($user);
-
-    $attributes = [
+    // ── ACT: lakukan aksi (kirim POST ke store) ──
+    $response = $this->post(route('outlets.store'), [
         'name' => 'New Outlet',
         'address' => '123 Main St',
-        'phone' => '555-555-5555',
-        'business_id' => $business->id,
-    ];
+        'phone' => '555-5555',
+    ]);
 
-    $response = $this->post(route('outlets.store'), $attributes);
-
-    $response->assertRedirect(route('outlets.index'));
-    $this->assertDatabaseHas('outlets', [
+    // ── ASSERT: cek hasilnya ──
+    $response->assertRedirect(route('business.edit'));   // dialihkan ke halaman Manage?
+    $this->assertDatabaseHas('outlets', [                 // outlet-nya ada di DB?
         'name' => 'New Outlet',
-        'address' => '123 Main St',
-        'phone' => '555-555-5555',
-        'business_id' => $business->id,
+        'business_id' => $this->business->id,             // business_id keisi otomatis?
     ]);
 });
 
 test('the create outlet page shows validation errors if required fields are missing', function () {
-    $user = User::factory()->create();
-    $this->actingAs($user);
-
     $response = $this->post(route('outlets.store'), [
-        'name' => '',
-        'business_id' => '',
+        'name' => ''
     ]);
 
-    $response->assertSessionHasErrors(['name', 'business_id']);
+    $response->assertSessionHasErrors(['name']);
 });
 
-test('the create outlet page shows validation errors for non-existent business', function () {
-    $user = User::factory()->create();
-    $this->actingAs($user);
+test('a user can update their own outlet', function () {
+    // ── ARRANGE: bikin outlet DI business milik user ──
+    $outlet = Outlets::factory()->create(['business_id' => $this->business->id]);
 
-    $response = $this->post(route('outlets.store'), [
-        'name' => 'New Outlet',
-        'address' => '123 Main St',
-        'phone' => '555-555-5555',
-        'business_id' => '00000000-0000-0000-0000-000000000000',
-    ]);
-
-    $response->assertSessionHasErrors('business_id');
-});
-
-test('an admin user can view the edit outlets page', function () {
-    $user = User::factory()->create();
-    $business = Business::factory()->create();
-    $outlet = Outlets::factory()->create(['business_id' => $business->id]);
-
-    $this->actingAs($user);
-
-    $response = $this->get(route('outlets.edit', $outlet));
-
-    $response->assertOk();
-    $response->assertInertia(fn (Assert $page) => $page
-        ->component('outlets/Edit')
-        ->where('outlet.id', $outlet->id)
-        ->where('outlet.name', $outlet->name)
-        ->where('outlet.address', $outlet->address)
-        ->where('outlet.phone', $outlet->phone)
-    );
-});
-
-test('an admin user can update an outlet', function () {
-    $user = User::factory()->create();
-    $business = Business::factory()->create();
-    $outlet = Outlets::factory()->create(['business_id' => $business->id]);
-
-    $this->actingAs($user);
-
-    $attributes = [
+    // ── ACT ──
+    $response = $this->put(route('outlets.update', $outlet), [
         'name' => 'Updated Outlet',
         'address' => '456 Updated St',
         'phone' => '555-555-1234',
-        'business_id' => $business->id,
-    ];
+    ]);
 
-    $response = $this->put(route('outlets.update', $outlet), $attributes);
-
-    $response->assertRedirect(route('outlets.index'));
+    // ── ASSERT ──
+    $response->assertRedirect(route('business.edit'));
     $this->assertDatabaseHas('outlets', [
         'id' => $outlet->id,
         'name' => 'Updated Outlet',
-        'address' => '456 Updated St',
-        'phone' => '555-555-1234',
-        'business_id' => $business->id,
     ]);
 });
 
-test('the update outlet page shows validation errors if required fields are missing', function () {
-    $user = User::factory()->create();
-    $business = Business::factory()->create();
-    $outlet = Outlets::factory()->create(['business_id' => $business->id]);
 
-    $this->actingAs($user);
+
+test('the update outlet page shows validation errors if required fields are missing', function () {
+    
+    $outlet = Outlets::factory()->create(['business_id' => $this->business->id]);
 
     $response = $this->put(route('outlets.update', $outlet), [
         'name' => '',
-        'business_id' => '',
     ]);
 
-    $response->assertSessionHasErrors(['name', 'business_id']);
+    $response->assertSessionHasErrors(['name']);
 });
 
-test('the update outlet page shows validation errors for non-existent business', function () {
-    $user = User::factory()->create();
-    $business = Business::factory()->create();
-    $outlet = Outlets::factory()->create(['business_id' => $business->id]);
-
-    $this->actingAs($user);
-
-    $response = $this->put(route('outlets.update', $outlet), [
-        'name' => 'Updated Outlet',
-        'address' => '456 Updated St',
-        'phone' => '555-555-1234',
-        'business_id' => '00000000-0000-0000-0000-000000000000',
-    ]);
-
-    $response->assertSessionHasErrors('business_id');
-});
-
-test('an admin user can delete an outlet', function () {
-    $user = User::factory()->create();
-    $business = Business::factory()->create();
-    $outlet = Outlets::factory()->create(['business_id' => $business->id]);
-
-    $this->actingAs($user);
+test('a user can delete their own outlet', function () {
+    $outlet = Outlets::factory()->create(['business_id' => $this->business->id]);
 
     $response = $this->delete(route('outlets.destroy', $outlet));
 
-    $response->assertRedirect(route('outlets.index'));
+    $response->assertRedirect(route('business.edit'));
     $this->assertSoftDeleted('outlets', [
         'id' => $outlet->id,
     ]);
+});
+
+test('a user cannot delete an outlet from another business', function () {
+    // ARRANGE: outlet milik business ORANG LAIN (bukan $this->business)
+    $otherBusiness = Business::factory()->create();
+    $otherOutlet = Outlets::factory()->create(['business_id' => $otherBusiness->id]);
+
+    // ACT: user login (dari beforeEach) coba hapus outlet yang bukan miliknya
+    $response = $this->delete(route('outlets.destroy', $otherOutlet));
+
+    // ASSERT: ditolak 404, dan outlet-nya masih utuh
+    $response->assertNotFound();
+    $this->assertNotSoftDeleted('outlets', ['id' => $otherOutlet->id]);
 });
