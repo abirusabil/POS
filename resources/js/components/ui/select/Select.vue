@@ -13,6 +13,7 @@ const forwarded = useForwardPropsEmits(props, emits)
     v-slot="slotProps"
     data-slot="select"
     v-bind="forwarded"
+    class="w-full"
   >
     <slot v-bind="slotProps" />
   </SelectRoot>

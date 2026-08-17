@@ -1,0 +1,123 @@
+// POS SaaS — ERD
+// Paste ke dbdiagram.io
+// Catatan: business_id/outlet_id di tiap tabel juga jadi basis policy Row-Level Security di PostgreSQL
+
+Table businesses {
+  id uuid [pk]
+  name varchar
+  owner_name varchar
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table outlets {
+  id uuid [pk]
+  business_id uuid [ref: > businesses.id]
+  name varchar
+  address varchar
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table users {
+  id uuid [pk]
+  business_id uuid [ref: > businesses.id]
+  outlet_id uuid [ref: > outlets.id, note: 'null untuk admin/owner yang akses lintas outlet']
+  name varchar
+  role varchar [note: 'admin | manager_outlet | kasir']
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table categories {
+  id uuid [pk]
+  business_id uuid [ref: > businesses.id]
+  name varchar
+}
+
+Table products {
+  id uuid [pk]
+  business_id uuid [ref: > businesses.id]
+  category_id uuid [ref: > categories.id, note: 'nullable']
+  name varchar
+  sku varchar
+  sell_price decimal
+  cost_price decimal
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table membership_tiers {
+  id uuid [pk]
+  business_id uuid [ref: > businesses.id]
+  name varchar [note: 'contoh: Silver, Gold']
+}
+
+Table customers {
+  id uuid [pk]
+  business_id uuid [ref: > businesses.id]
+  membership_tier_id uuid [ref: > membership_tiers.id, note: 'null = bukan member']
+  name varchar
+  phone varchar
+  created_at timestamp
+}
+
+Table discounts {
+  id uuid [pk]
+  business_id uuid [ref: > businesses.id]
+  membership_tier_id uuid [ref: > membership_tiers.id, note: 'diisi kalau type = membership']
+  name varchar
+  type varchar [note: 'membership | event']
+  scope varchar [note: 'total | product | category']
+  target_id uuid [note: 'id produk/kategori kalau scope bukan total; null kalau total']
+  value_type varchar [note: 'percentage | fixed']
+  value decimal
+  start_date date [note: 'null untuk diskon membership yang terus berlaku']
+  end_date date
+  is_combinable boolean [note: 'boleh digabung dengan diskon lain atau tidak']
+  is_active boolean
+}
+
+Table stocks {
+  id uuid [pk]
+  product_id uuid [ref: > products.id]
+  outlet_id uuid [ref: > outlets.id]
+  qty int
+  updated_at timestamp
+}
+
+Table transactions {
+  id uuid [pk]
+  outlet_id uuid [ref: > outlets.id]
+  user_id uuid [ref: > users.id]
+  customer_id uuid [ref: > customers.id, note: 'nullable, null = customer umum non-member']
+  discount_id uuid [ref: > discounts.id, note: 'diskon yang otomatis dipilih sistem, nullable']
+  discount_amount decimal [note: 'nominal diskon yang diterapkan']
+  total decimal
+  local_id uuid [note: 'UUID dibuat di device mobile saat transaksi (termasuk offline), dipakai cegah duplikat pas sync']
+  synced_at timestamp [note: 'null = belum tersinkron dari mobile offline']
+  created_at timestamp
+}
+
+Table transaction_items {
+  id uuid [pk]
+  transaction_id uuid [ref: > transactions.id]
+  product_id uuid [ref: > products.id]
+  qty int
+  price decimal
+}
+
+Table cost_categories {
+  id uuid [pk]
+  name varchar
+  type varchar [note: 'fixed | variable']
+}
+
+Table operational_costs {
+  id uuid [pk]
+  outlet_id uuid [ref: > outlets.id]
+  category_id uuid [ref: > cost_categories.id]
+  amount decimal
+  period varchar [note: 'contoh: 2026-08 untuk periode bulanan']
+  created_at timestamp
+}
